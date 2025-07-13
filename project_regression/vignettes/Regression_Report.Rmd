@@ -1,0 +1,32 @@
+---
+title: "Regression Report"
+author: "Tay Jing Rui"
+output: html_document
+---
+
+# Data Summary
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(dplyr)
+```
+
+# Introduction
+
+# EDA
+```{r}
+summary(cleaned_data)
+```
+
+# Data Cleaning and Feature Engineer
+
+# Modelling
+
+# Evaluation of Results
+```{r}
+evaluation$model_summaries
+evaluation$model_performance
+```
+
+# Intepretation

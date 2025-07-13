@@ -1,0 +1,80 @@
+---
+title: "Classification Report"
+author: "Tay Jing Rui"
+output: html_document
+---
+
+
+
+# Data Summary
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(targets)
+library(ggplot2)
+library(dplyr)
+library(caret)
+library(corrplot)
+library(gridExtra)
+raw_data <- tar_read(raw_data)
+cleaned_data <- tar_read(cleaned_data)
+evaluation <- tar_read(evaluation)
+```
+# Exploratory Data Analysis (EDA)
+
+```{r}
+ggplot(raw_data, aes(as.factor(casualty_severity), fill=as.factor(casualty_severity))) +
+  geom_bar() +
+  labs(title="Casualty Severity Distribution", x="Severity", y="Count") +
+  theme_minimal()
+
+num_vars <- select_if(raw_data, is.numeric)
+if (ncol(num_vars) > 1) {
+  corr_matrix <- cor(num_vars, use="pairwise.complete.obs")
+  corrplot::corrplot(corr_matrix, method = "color", tl.cex=0.7)
+}
+```
+# Feature Engineering
+Original obs_date was split into obs_weekday, obs_hour, obs_month, obs_year for date time features.
+We then bin the continuous variables like casualty_age_group into (Child, Youth, Adult, Elderly), driver_age_group into 
+(Young, Adult, Middle, Senior), speed_zone into (Low, Medium, High), engine_size_group into (Small, Medium, Large).
+We followed by featuring indicator variables; is_night (1=dark, 0=daylight), is_urban (1=urban, 0=rural), 
+vulnerable_pedestrian (1=Child, 0=Elderly), on_crossing (1=yes, 0=no). 
+
+We then computed high cardinality columns after factorizing character data and drop those with more than 30 unique levels and 
+variables like identifiers, references and features like accident_severity.
+
+We finally used all the featured variables and the rests to continue with our modelling.
+
+# Visualisation after FE
+```{r}
+p1 <- ggplot(cleaned_data, aes(speed_zone, fill=casualty_severity)) + 
+  geom_bar(position='dodge') + ggtitle("Speed Zone vs Severity")
+p2 <- ggplot(cleaned_data, aes(as.factor(is_night), fill=casualty_severity)) + 
+  geom_bar(position='dodge') + scale_x_discrete(labels=c("Day","Night")) + ggtitle("Night vs Severity")
+p3 <- ggplot(cleaned_data, aes(engine_size_group, fill=casualty_severity)) + 
+  geom_bar(position='dodge') + ggtitle("Engine Size vs Severity")
+p4 <- ggplot(cleaned_data, aes(casualty_age_group, fill=casualty_severity)) + 
+  geom_bar(position='dodge') + ggtitle("Casualty Age Group vs Severity")
+
+gridExtra::grid.arrange(p1, p2, p3, p4, ncol=2)
+
+num_vars <- select(cleaned_data, where(is.numeric))
+if (ncol(num_vars) > 1) {
+  corr_matrix <- cor(num_vars)
+  corrplot::corrplot(corr_matrix, method = "color")
+}
+```
+
+# Model Train
+
+
+# Results
+```{r}
+evaluation$cm_multinom
+evaluation$cm_rf
+evaluation$cm_xgb
+cat("Multinomial AUC:", evaluation$auc_multinom, "\n")
+cat("Random Forest AUC:", evaluation$auc_rf, "\n")
+cat("XGBoost AUC:", evaluation$auc_xgb, "\n")
+```

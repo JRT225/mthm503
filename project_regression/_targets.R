@@ -1,0 +1,69 @@
+library(targets)
+library(tarchetypes)
+library(here)
+
+source("R/load_fire_finance_data.R")
+source("R/clean_data.R")
+source("R/perform_eda.R")
+source("R/train_test_split.R")
+source("R/train_multinom_regression.R")
+source("R/train_glm_model.R")
+source("R/train_interaction_model.R")
+source("R/evaluate_regression_models.R")
+
+tar_option_set(packages = c(
+  "dplyr", "DBI", "RPostgres", "tidyverse", "yardstick", "vip", "readr", "tune",
+  "tidyr", "workflows", "parsnip", "rsample", "themis", "corrplot", "caret", "nnet"
+))
+
+list(
+  tar_target(
+    raw_data,
+    load_fire_finance_data()
+  ),
+  tar_target(
+    cleaned_data,
+    clean_data(raw_data)
+  ),
+  tar_target(
+    eda_results,
+    perform_eda(cleaned_data)
+  ),
+  tar_target(
+    split,
+    train_test_split(cleaned_data)
+  ),
+  tar_target(
+    train_data,
+    split$train
+  ),
+  tar_target(
+    test_data,
+    split$test
+  ),
+  tar_target(
+    model_multinom,
+    train_multinom_regression(train_data)
+  ),
+  tar_target(
+    model_glm,
+    train_glm_model(train_data)
+  ),
+  tar_target(
+    model_interaction,
+    train_interaction_model(train_data)
+  ),
+  tar_target(
+    evaluation,
+    evaluate_regression_models(
+      model_multinom,
+      model_glm,
+      model_interaction,
+      test_data
+    )
+  ),
+  tar_render(
+    report,
+    "vignettes/Regression_Report.Rmd"
+  )
+)

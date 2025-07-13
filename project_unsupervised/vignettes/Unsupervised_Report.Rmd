@@ -1,0 +1,42 @@
+---
+title: "Unsupervised Report"
+author: "Tay Jing Rui"
+output: html_document
+---
+
+# Data Summary
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(corrplot)
+```
+
+# Introduction
+
+# EDA
+```{r}
+summary(cleaned_data)
+# Histograms and boxplots of features
+eda_results$histograms
+eda_results$boxplots
+corrplot(cor(select(cleaned_data, -id)), method = "color")
+```
+
+# PCA
+```{r}
+summary(pca)
+plot(pca, type="lines") # Scree plot
+biplot(pca, scale=0)
+```
+
+# Clustering
+```{r}
+# K-means results
+kmeans_summary
+cat("K-means silhouette score:", silhouette_kmeans, "\n")
+# DBSCAN results
+dbscan_summary
+```
+
+# Interpretation
