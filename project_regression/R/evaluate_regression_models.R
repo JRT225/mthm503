@@ -1,9 +1,10 @@
-evaluate_regression_models <- function(model_multinom, model_glm, model_interaction, test_data) {
-  # Example: Return AIC and summaries for each model
+evaluate_regression_models <- function(model_multinom, model_multinom_sev, model_int, model_sev_int, test_data) {
   list(
-    aic = AIC(model_multinom, model_interaction, model_glm),
+    aic = AIC(model_multinom, model_multinom_sev, model_int, model_sev_int),
     summary_multinom = summary(model_multinom),
-    summary_interaction = summary(model_interaction),
-    summary_glm = summary(model_glm)
+    summary_multinom_sev = summary(model_multinom_sev),
+    summary_int = summary(model_int),
+    summary_sev_int = summary(model_sev_int)
+
   )
 }

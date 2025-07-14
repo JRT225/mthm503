@@ -7,7 +7,6 @@ source("R/clean_data.R")
 source("R/perform_eda.R")
 source("R/train_test_split.R")
 source("R/train_multinom_regression.R")
-source("R/train_glm_model.R")
 source("R/train_interaction_model.R")
 source("R/evaluate_regression_models.R")
 
@@ -43,22 +42,27 @@ list(
   ),
   tar_target(
     model_multinom,
-    train_multinom_regression(train_data)
+    train_multinom_regression(train_data)$model
   ),
   tar_target(
-    model_glm,
-    train_glm_model(train_data)
+    model_multinom_sev,
+    train_multinom_regression(train_data)$model_sev
   ),
   tar_target(
-    model_interaction,
-    train_interaction_model(train_data)
+    model_int,
+    train_interaction_model(train_data)$model_int
+  ),
+  tar_target(
+    model_sev_int,
+    train_interaction_model(train_data)$model_sev_int
   ),
   tar_target(
     evaluation,
     evaluate_regression_models(
       model_multinom,
-      model_glm,
-      model_interaction,
+      model_multinom_sev,
+      model_int,
+      model_sev_int,
       test_data
     )
   ),

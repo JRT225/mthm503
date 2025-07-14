@@ -10,6 +10,10 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
 library(dplyr)
+
+eda_results <- tar_read(eda_results)
+model_multinom <- tar_read(model_multinom)
+evaluation <- tar_read(evaluation)
 ```
 
 # Introduction
@@ -18,19 +22,25 @@ In this project, we investigate factors which are associated with the extricatio
 # Data Loading and EDA
 We loaded two key datasets; fire_rescue_extrication_casualties and stats19_by_financial_year from the database then left join them by financial year. This dataset has a total of 2310x7 observations and columns. 
 ```{r}
-
+eda_results
 ```
 
-# Data Cleaning and Feature Engineer
+# Data Cleaning
 We used sapply() to check for NA values across the dataframe but no NAs are found. Categorical columns were then converted to factors. We found "Unknown" values in extrication, age and sex variables, we decided to drop them as they may post biases and we have enough data. 
 ```{r}
 
 ```
 
 # Modelling
-
+```{r}
+summary(model_multinom$model)
+summary(model_multinom$model_int)
+summary(model_multinom$model_severity)
+summary(model_multinom$model_severity_int)
+```
 # Evaluation of Results
 ```{r}
+evaluation
 ```
 
 # Intepretation

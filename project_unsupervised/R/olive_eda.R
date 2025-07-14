@@ -19,6 +19,7 @@ olive_eda <- function(df) {
   df_num <- df %>% select(-id)
   corr_matrix <- cor(df_num)
   corrplot::corrplot(corr_matrix, method = "color", type = "upper", addCoef.col = "black", tl.col = "black")
+  
   # Save summary
   summary(df)
   list(
