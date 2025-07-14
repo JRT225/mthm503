@@ -15,6 +15,7 @@ library(themis)
 library(corrplot)
 library(caret)
 library(nnet)
+library(broom)
 
 con <- dbConnect(
   RPostgres::Postgres(),
@@ -53,13 +54,14 @@ table(df$casualty_severity)
 table(df$extrication, df$sex)
 table(df$extrication, df$age_band)
 
-ggplot(df, aes(sex)) +
+sex <- ggplot(df, aes(sex)) +
   geom_bar() +
   labs(title = "Sex Counts")
 
-ggplot(df, aes(age_band)) +
+age <- ggplot(df, aes(age_band)) +
   geom_bar() +
   labs(title= "Age Band Counts")
+gridExtra::grid.arrange(sex, age, ncol=2)
 
 # Extrication by sex
 ggplot(df, aes(x = sex, fill = extrication)) +
@@ -99,6 +101,57 @@ ggplot(df_clean, aes(x = sex, fill = extrication)) +
   facet_wrap(~age_band) +
   labs(y="Proportion", title="Extrication Method by Age and Sex")
 
+# Extrication method distribution by severity
+ggplot(df_clean, aes(x = casualty_severity, fill = extrication)) +
+  geom_bar(position = "fill") +
+  labs(title = "Extrication Method by Casualty Severity", y = "Proportion", x = "Severity")
+
+# Cross-tabulate extrication by sex and severity
+ggplot(df_clean, aes(x = sex, fill = extrication)) +
+  geom_bar(position = "fill") +
+  facet_wrap(~casualty_severity) +
+  labs(title = "Extrication by Sex & Severity", y = "Proportion", x = "Sex")
+
+# Cross-tabulate extrication by age band and severity
+ggplot(df_clean, aes(x = age_band, fill = extrication)) +
+  geom_bar(position = "fill") +
+  facet_wrap(~casualty_severity) +
+  labs(title = "Extrication by Age Band & Severity", y = "Proportion", x = "Age Band")
+
+
+# Plotting with extrication rate
+rate_severity_summary <- df_clean %>%
+  group_by(age_band, sex, casualty_severity) %>%
+  summarise(mean_rate = mean(extrication_rate, na.rm = TRUE))
+
+ggplot(rate_severity_summary, aes(x = age_band, y = mean_rate, fill = sex)) +
+  geom_col(position = "dodge") +
+  facet_wrap(~casualty_severity) +
+  labs(title = "Mean Extrication Rate by Age, Sex, and Severity",
+       y = "Mean Extrication Rate", x = "Age Band") +
+  scale_y_continuous(labels = scales::percent)
+
+# Extrication rate by year
+yearly_summary <- df_clean %>%
+  group_by(financial_year, extrication) %>%
+  summarise(mean_rate = mean(extrication_rate, na.rm = TRUE), .groups="drop")
+
+ggplot(yearly_summary, aes(x = financial_year, y = mean_rate, color = extrication, group = extrication)) +
+  geom_line() +
+  labs(title = "Extrication Rate Over Time", y = "Mean Extrication Rate", x = "Financial Year") +
+  scale_y_continuous(labels = scales::percent) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+tab_sex <- table(df_clean$extrication, df_clean$sex)
+tab_age <- table(df_clean$extrication, df_clean$age_band)
+tab_severity <- table(df_clean$extrication, df_clean$casualty_severity)
+tab_finance <- table(df_clean$extrication, df_clean$financial_year)
+
+chisq.test(tab_sex)
+chisq.test(tab_age)  
+chisq.test(tab_severity)
+chisq.test(tab_finance)
 # Multinormial
 model <- multinom(extrication ~ sex + age_band, data = df_clean)
 summary(model)
@@ -106,14 +159,22 @@ summary(model)
 model_int <- multinom(extrication ~ sex * age_band, data = df_clean)
 summary(model_int)
 
-glm_model <- glm(
-  cbind(n_casualties, number_of_stat19_reported_casualties - n_casualties) ~ sex + age_band,
-  family = binomial,
-  data = df_clean
+# Multinomial with severity
+model_severity <- multinom(extrication ~ sex + age_band + casualty_severity, data = df_clean)
+summary(model_severity)
+
+# # Multinomial with severity interaction
+model_severity_int <- multinom(extrication ~ sex * age_band * casualty_severity, data = df_clean)
+summary(model_severity_int)
+
+summary_list <- list(
+  Model1 = summary(model),
+  Model2 = summary(model_int),
+  Model3 = summary(model_severity),
+  Model4 = summary(model_severity_int)
 )
-summary(glm_model)
 
-AIC(model, model_int, glm_model)
+AIC(model, model_int, model_severity, model_severity_int)
 
-str(df_clean)
+
 

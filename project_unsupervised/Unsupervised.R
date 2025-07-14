@@ -4,6 +4,9 @@ library(tidyr)
 library(ggplot2)
 library(corrplot)
 library(reshape2)
+library(dbscan)
+library(cluster)
+library(GGally)
 
 con <- dbConnect(
   RPostgres::Postgres(),
@@ -51,7 +54,6 @@ ggplot(df_reshape, aes(x = variable, y = value)) +
   theme_minimal() +
   labs(title = "Boxplots of Fatty Acid Features", x = "Fatty Acid", y = "Value")
 
-library(GGally)
 GGally::ggpairs(df %>% select(-id))
 
 # PCA Dimensionality reduction
@@ -87,31 +89,41 @@ ggplot(df_pca, aes(PC1, PC2, color=cluster)) +
   theme_minimal() +
   labs(title = "K Means Cluster in PCA space")
 
-library(cluster)
 sil <- silhouette(kmeans$cluster, dist(df_scaled))
-mean(sil[, 3]) # average silhouette width, higher is better (max 1)
+sil_df <- as.data.frame(sil[, 1:3])
+colnames(sil_df) <- c("cluster", "neighbor", "sil_width")
+sil_df$cluster <- factor(sil_df$cluster)
 
-plot(sil, main = "Silhouette plot for k-means clustering (k=3)")
+ggplot(sil_df, aes(x = reorder(row.names(sil_df), sil_width), y = sil_width, fill = cluster)) +
+  geom_bar(stat = "identity") +
+  facet_wrap(~cluster, scales = "free_y") +
+  labs(
+    title = "Silhouette plot",
+    x = "Observation",
+    y = "Silhouette width"
+  ) +
+  coord_flip() +
+  theme_minimal() +
+  theme(axis.text.y = element_blank()) 
 
-install.packages("dbscan")
-library(dbscan)
-
+# DBSCAN
 #Finding best knn
 kNNdistplot(df_scaled, k=5)
-abline(h=1.5, lty=2)
+abline(h=1, lty=2)
 
-#Setting eps =1.5
+#Setting eps =1
 db <- dbscan(df_scaled, eps = 1, minPts = 5)
 table(db$cluster)
 
 df_pca <- as.data.frame(pca$x)
 df_pca$dbscan_cluster <- factor(db$cluster)
-library(ggplot2)
+
 ggplot(df_pca, aes(PC1, PC2, color = dbscan_cluster)) + 
   geom_point(size = 2) + 
   theme_minimal() + 
   labs(title = "DBSCAN clusters in PCA space")
 
+# Aggregation for both clustering techniques
 # For k-means:
 df_kmeans <- cbind(df_num, kmeans_cluster = kmeans$cluster)
 aggregate(. ~ kmeans_cluster, data = df_kmeans, FUN = mean)

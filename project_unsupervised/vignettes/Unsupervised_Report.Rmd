@@ -10,6 +10,20 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
 library(corrplot)
+library(tidyr)
+library(ggplot2)
+library(corrplot)
+library(reshape2)
+library(dbscan)
+library(cluster)
+library(GGally)
+raw_data <- tar_read(raw_data)
+cleaned_data <- tar_read(cleaned_data)
+eda_results <- tar_read(eda_results)
+pca <- tar_read(pca)
+kmeans_summary <- tar_read(kmeans_summary)
+dbscan_summary <- tar_read(dbscan_summary)
+silhouette_kmeans <- tar_read(silhouette_kmeans)
 ```
 
 # Introduction

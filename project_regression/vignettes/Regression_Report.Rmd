@@ -13,20 +13,24 @@ library(dplyr)
 ```
 
 # Introduction
+In this project, we investigate factors which are associated with the extrication methods used for casualties in fire and rescue incidents with variables such as sex, age, casualty severity and financial year. 
 
-# EDA
+# Data Loading and EDA
+We loaded two key datasets; fire_rescue_extrication_casualties and stats19_by_financial_year from the database then left join them by financial year. This dataset has a total of 2310x7 observations and columns. 
 ```{r}
-summary(cleaned_data)
+
 ```
 
 # Data Cleaning and Feature Engineer
+We used sapply() to check for NA values across the dataframe but no NAs are found. Categorical columns were then converted to factors. We found "Unknown" values in extrication, age and sex variables, we decided to drop them as they may post biases and we have enough data. 
+```{r}
+
+```
 
 # Modelling
 
 # Evaluation of Results
 ```{r}
-evaluation$model_summaries
-evaluation$model_performance
 ```
 
 # Intepretation

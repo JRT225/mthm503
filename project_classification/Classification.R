@@ -10,7 +10,8 @@ library(pROC)
 library(car)
 library(VIM)
 library(gridExtra)
-library(pROC)
+library(tibble)
+library(knitr)
 
 con <- dbConnect(
   RPostgres::Postgres(),
@@ -41,6 +42,7 @@ write_csv(ped_df, "file.csv")
 
 # Load Data
 data <- ped_df
+str(data)
 head(data, 10)
 summary(data)
 #EDA
@@ -62,6 +64,40 @@ if (ncol(num_vars) > 1) {
 data <- data[, colSums(is.na(data)) < nrow(data)]
 data <- data[, sapply(data, function(x) length(unique(x[!is.na(x)])) > 1)]
 
+# Pick all columns except IDs and other potential leakage
+exclude_cols <- c("accident_index", "vehicle_reference", "enhanced_casualty_severity", "enhanced_collision_severity" ,"casualty_reference", "geom", "from_pt", "to_pt", "generic_make_model", "lsoa_of_casualty", "lsoa_of_driver", "lsoa_of_accident_location", "lad_ons", "lah_ons") 
+# Remove them
+exclude_cols <- intersect(exclude_cols, names(data))
+all_cols <- setdiff(names(data), exclude_cols)
+# Ensure target
+all_cols <- c("casualty_severity", setdiff(all_cols, "casualty_severity"))
+
+data_imp <- data[, all_cols]
+
+# Impute or remove rows with NA
+Mode <- function(x) {
+  ux <- unique(x[!is.na(x)])
+  ux[which.max(tabulate(match(x, ux)))]
+}
+data_imp <- data_imp %>%
+  mutate(
+    across(where(is.numeric), ~ifelse(is.na(.), median(., na.rm=TRUE), .)),
+    across(where(is.character), ~ifelse(is.na(.), Mode(.), .))
+  ) %>%
+  mutate(across(where(is.character), as.factor))
+
+data_imp$casualty_severity <- as.factor(data_imp$casualty_severity)
+rf_imp <- randomForest(casualty_severity ~ ., data = data_imp, importance = TRUE, ntree = 200)
+varImpPlot(rf_imp)
+importance(rf_imp)
+
+# Choosing top 10 features based on MeanDecreaseGini
+imp_tbl <- as.data.frame(importance(rf_imp))
+imp_tbl$Feature <- rownames(imp_tbl)
+imp_tbl <- imp_tbl[order(-imp_tbl$MeanDecreaseGini), ] # sort descending
+head(imp_tbl, 10)
+
+
 # Impute missing values, aggregation
 Mode <- function(x) {
   ux <- unique(x[!is.na(x)])
@@ -82,7 +118,7 @@ data <- data %>%
     obs_year = year(obs_date_parsed),
     casualty_age_group = cut(
       age_of_casualty,
-      breaks = c(-Inf, 12, 18, 65, Inf),
+      breaks = c(-Inf, 12, 21, 60, Inf),
       labels = c("Child", "Youth", "Adult", "Elderly")
     ),
     driver_age_group = if ("age_of_driver" %in% names(.)) {
@@ -137,13 +173,21 @@ str(data_selected)
 summary(data_selected)
 
 p1 <- ggplot(data_selected, aes(speed_zone, fill=casualty_severity)) + 
-  geom_bar(position='dodge') + ggtitle("Speed Zone vs Severity")
+  geom_bar(position='dodge') + 
+  ggtitle("Speed Zone vs Severity")
+
 p2 <- ggplot(data_selected, aes(as.factor(is_night), fill=casualty_severity)) + 
-  geom_bar(position='dodge') + scale_x_discrete(labels=c("Day","Night")) + ggtitle("Night vs Severity")
+  geom_bar(position='dodge') + 
+  scale_x_discrete(labels=c("Day","Night")) + 
+  ggtitle("Night vs Severity")
+
 p3 <- ggplot(data_selected, aes(engine_size_group, fill=casualty_severity)) + 
-  geom_bar(position='dodge') + ggtitle("Engine Size vs Severity")
+  geom_bar(position='dodge') + 
+  ggtitle("Engine Size vs Severity")
+
 p4 <- ggplot(data_selected, aes(casualty_age_group, fill=casualty_severity)) + 
-  geom_bar(position='dodge') + ggtitle("Casualty Age Group vs Severity")
+  geom_bar(position='dodge') + 
+  ggtitle("Casualty Age Group vs Severity")
 
 gridExtra::grid.arrange(p1, p2, p3, p4, ncol=2)
 
@@ -166,7 +210,8 @@ cv_ctrl <- trainControl(
   number = 5,
   classProbs = TRUE,
   summaryFunction = multiClassSummary,
-  savePredictions = TRUE
+  savePredictions = TRUE,
+  sampling = "smote"
 )
 
 # Train multinomial logistic regression
@@ -211,6 +256,81 @@ cm_xgb <- confusionMatrix(pred_xgb, test_data$casualty_severity)
 print(cm_multinom)
 print(cm_rf)
 print(cm_xgb)
+
+# Filter macro metrics and showing in tables
+get_macro <- function(cm, metric) {
+  vals <- cm$byClass[, metric]
+  mean(vals, na.rm=TRUE)
+}
+model_names <- c("Multinom", "RandomForest", "XGBoost")
+accuracy <- c(
+  cm_multinom$overall["Accuracy"],
+  cm_rf$overall["Accuracy"],
+  cm_xgb$overall["Accuracy"]
+)
+kappa <- c(
+  cm_multinom$overall["Kappa"],
+  cm_rf$overall["Kappa"],
+  cm_xgb$overall["Kappa"]
+)
+precision <- c(
+  get_macro(cm_multinom, "Pos Pred Value"),
+  get_macro(cm_rf, "Pos Pred Value"),
+  get_macro(cm_xgb, "Pos Pred Value")
+)
+recall <- c(
+  get_macro(cm_multinom, "Sensitivity"),
+  get_macro(cm_rf, "Sensitivity"),
+  get_macro(cm_xgb, "Sensitivity")
+)
+balanced_acc <- c(
+  get_macro(cm_multinom, "Balanced Accuracy"),
+  get_macro(cm_rf, "Balanced Accuracy"),
+  get_macro(cm_xgb, "Balanced Accuracy")
+)
+tbl <- data.frame(
+  Model = model_names,
+  Accuracy = accuracy,
+  Kappa = kappa,
+  Precision = precision,
+  Recall = recall,
+  Balanced_Accuracy = balanced_acc
+)
+knitr::kable(tbl, digits=3, caption = "Overall Model Performance (Macro Averages)")
+
+get_class_metric <- function(cm, metric) {
+  vals <- cm$byClass[, metric]
+  # Name the vector by class, for clarity
+  names(vals) <- rownames(cm$byClass)
+  return(vals)
+}
+
+# Set classes
+classes <- rownames(cm_multinom$byClass)
+
+# Make the table for classes
+class_metrics <- data.frame(
+  Class = rep(classes, each = 3),
+  Model = rep(c("Multinom", "RandomForest", "XGBoost"), times = length(classes)),
+  Precision = c(get_class_metric(cm_multinom, "Pos Pred Value"),
+                get_class_metric(cm_rf, "Pos Pred Value"),
+                get_class_metric(cm_xgb, "Pos Pred Value")),
+  Recall = c(get_class_metric(cm_multinom, "Sensitivity"),
+             get_class_metric(cm_rf, "Sensitivity"),
+             get_class_metric(cm_xgb, "Sensitivity")),
+  Balanced_Accuracy = c(get_class_metric(cm_multinom, "Balanced Accuracy"),
+                        get_class_metric(cm_rf, "Balanced Accuracy"),
+                        get_class_metric(cm_xgb, "Balanced Accuracy"))
+)
+
+class_metrics_wide <- pivot_wider(
+  class_metrics,
+  id_cols = Class,
+  names_from = Model,
+  values_from = c(Precision, Recall, Balanced_Accuracy),
+  names_glue = "{Model}_{.value}"
+)
+knitr::kable(class_metrics_wide, digits = 3, caption = "Per-class Model Metrics")
 
 # Multiclass ROC/AUC
 prob_multinom <- predict(model_multinom, test_data, type = "prob")
