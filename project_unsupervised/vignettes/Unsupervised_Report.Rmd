@@ -4,53 +4,116 @@ author: "Tay Jing Rui"
 output: html_document
 ---
 
-# Data Summary
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
 library(corrplot)
 library(tidyr)
-library(ggplot2)
-library(corrplot)
 library(reshape2)
 library(dbscan)
 library(cluster)
 library(GGally)
+
 raw_data <- tar_read(raw_data)
 cleaned_data <- tar_read(cleaned_data)
 eda_results <- tar_read(eda_results)
 pca <- tar_read(pca)
+silhouette_kmeans <- tar_read(silhouette_kmeans_1)
 kmeans_summary <- tar_read(kmeans_summary)
+knn_plot <- tar_read(knn_plot)
 dbscan_summary <- tar_read(dbscan_summary)
-silhouette_kmeans <- tar_read(silhouette_kmeans)
+pca_scree_plot <- tar_read(pca_scree_plot)
+pca_biplot <- tar_read(pca_biplot)
+elbow_plot <- tar_read(elbow_plot)
+kmeans_pca_plot <- tar_read(kmeans_pca_plot)
+dbscan_pca_plot <- tar_read(dbscan_pca_plot)
+
 ```
 
 # Introduction
+In this project, we explore the different fatty acids in Olive Oil and explore different components in them. Olive oil is widely used in people diets and culinary in their day-to-day life, understanding the composition of olive oil can be very beneficial to address concerns and benefits it has. Hence, we will be using unsupervised learning techniques to show possible patterns of these fatty acids within olive oil.
 
-# EDA
+# Data
+We have collected our data, “olive_oil” from the database. This dataset consists of 572 samples with 8 different fatty acids: palmitic, palmitoleic, stearic, oleic, linoleic, linolenic, arachidic, eicosenoic.
+There are no missing values in the dataset extracted. 
+
+# Exploratory Data Analysis
 ```{r}
-summary(cleaned_data)
-# Histograms and boxplots of features
-eda_results$histograms
-eda_results$boxplots
-corrplot(cor(select(cleaned_data, -id)), method = "color")
+print(eda_results$histograms)
 ```
+
+We first look at the distribution of the fatty acids as shown above. We see that Oleic reflects a more normally distributed pattern with many high points which reflects being majority of olive oil’s fat content and heterogeneity. Stearic shows a roughly normal distribution with slight right skew. Acids like palmitic, palmitoleic and linoleic shows bimodality distributions, showing possible variation in different samples. Eicosenoic acid is highly right skewed with most values clustered around 10 with high peaks. Linolenic and Arachidic displaying multiple high points, indicating clustering in different samples.
+
+```{r}
+corrplot(eda_results$correlation_matrix, method="color", type="upper", addCoef.col="black", tl.col="black")
+```
+
+From the correlation matrix, we see strong negative correlation between oleic and palmitic, palmitoleic acids with -0.84 and -0.85 respectively. This shows that the increase of oleic in olive oil will results in lesser palmitic and palmitoleic. This further explains the high positive correlation between palmitic and palmitoleic. Lionoleic acid is negatively correlated to oleic as well with -0.85 correlation and moderate to high positive correlation to palmitoleic and palmitic. Linoleic often comes together with palmitic and palmitoleic in olive oils. Positive correlations can mainly be observed in eicosenoic, linolenic, palmitoleic and palmitic, indicating that they could be less fatty acids as compared to oleic. With these many high correlations, we will use principle component analysis for dimensionality reduction to reveal some relationships.
+
+```{r}
+print(eda_results$boxplots)
+```
+
+Boxplot highlights that oleic acid holds the majority of the fatty acids in most olive oil samples as we have deduced in our previous correlation matrix. Furthermore, outliers do not exist for oleic but other minor fatty acids. This suggests that the minor fatty acids may be present as anomalies in olive oil samples.
 
 # PCA
+
 ```{r}
-summary(pca)
-plot(pca, type="lines") # Scree plot
-biplot(pca, scale=0)
+print(pca_scree_plot)
 ```
 
-# Clustering
+Our PCA plot above shows that most of the variance have been explained at around PC2 to PC3. This means that most data will be captured even when dimensionality is reduced from 8 to 2 or 3.
+
+```{r}
+print(pca_biplot)
+```
+
+From our PCA biplot, we see different groupings of olive oil samples, clustered with the different groups of fatty acids which are highly correlated to each other. Samples of the left has high oleic acid and do not consist much of other fatty acids. Eicosenoic, arachidic and linolenic clustered that the bottom right and linoleic, palmitoleic and palmitic on the top right. We also see stearic acid having shorter arrow, indicating that it is not contributing strongly as compared to the other fatty acids. 
+
+# Clustering KMeans
+Before modelling our K-Means clustering, we now want to decide the number of k clusters. So, we computed a plot using the within-group sum of squares against the number of clusters to suggest an elbow plot.
 ```{r}
 # K-means results
-kmeans_summary
-cat("K-means silhouette score:", silhouette_kmeans, "\n")
-# DBSCAN results
-dbscan_summary
+print(elbow_plot)
 ```
 
-# Interpretation
+The elbow plot reveals that k=3 is a reasonable choice as it starts to diminish afterwards. 
+
+```{r}
+print(kmeans_pca_plot)
+```
+
+After computing K-Means clustering with 3 clusters, Figure 18 depicts the results in PCA space. It reveals 3 distinct, well separated clusters. This shows that majority of the olive oil samples have dominant acids, showing in these respective clusters. This pattern is also reflected in our previous PCA Biplot from Figure 16, showing 3 distinct clusters of fatty acid groupings. 
+
+#Silhouette Plot
+```{r}
+print(silhouette_kmeans)
+```
+
+We further analyse using silhouette plot which shows that cluster 1 and 2 has high widths, suggesting strong acid grouping. Cluster 3 has lower widths and even negative values, this could be due to some uncommon mixtures of fatty acids in the olive oil samples. Overall, K-means with 3 clusters managed to capture clear division and grouping of the respective fatty acids.
+
+```{r}
+print(kmeans_summary)
+```
+
+# Clustering DBSCAN
+We used DBSCAN, a density-based clustering method, as our second method. We first used k-nearest-neighbours distance plot to tune the eps parameter to define the radius of the neighbour around our data point.
+
+```{r}
+print(knn_plot)
+```
+
+From the above plot, we see that the curve is going upwards at epsilon=1. Hence, we will be using eps = 1 in our parameter to get the best set of clusters and potentially some other information as well.
+
+```{r}
+print(dbscan_pca_plot)
+```
+
+Our DBSCAN in PCA space shows 7 clusters formed. Observation shows that cluster 1 – 6 are well within their own clusters whereas cluster 0’s points are scatters across all other clusters. Cluster 2 and 6 are very compact while cluster 4, 1, 3 are less compact. This could suggest more different acid components in cluster 4,1,3 as compared of 2 and 6. Cluster 5 only has a few points, still being grouped together, perhaps a more unique blend of fatty acid components in that cluster. Overall, our DBSCAN showed 6 clear clusters (1-6) of olive oil samples and cluster 0 acting as outliers and noise mixing around with the other clusters.
+
+```{r}
+print(dbscan_summary)
+```
+
+# Conclusion
+Ultimately, along with principal component analysis, K-Means is efficient in providing partition of the olive oil data in 3 clusters, showing clear that which 3 groups of fatty acids are clustered together with our EDA. But it is not flexible in capturing noise and anomaly detection which can serve as great information for hypothesis. DBSCAN on the other hand, is able to detect more clusters and identify outliers across the clusters. 

@@ -4,43 +4,76 @@ author: "Tay Jing Rui"
 output: html_document
 ---
 
-# Data Summary
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(ggplot2)
 library(dplyr)
+library(knitr)
+library(broom)
 
 eda_results <- tar_read(eda_results)
 model_multinom <- tar_read(model_multinom)
 evaluation <- tar_read(evaluation)
+chi_sq_results <- tar_read(chi_sq_results)
 ```
 
 # Introduction
-In this project, we investigate factors which are associated with the extrication methods used for casualties in fire and rescue incidents with variables such as sex, age, casualty severity and financial year. 
+In this project, we investigate factors which are associated with the extrication methods used for casualties in fire and rescue incidents with variables such as sex, age, casualty severity and financial year. We will be exploring the trends in extrication rates and assess the demographic and casualty characteristics to predict the type of extrication. This will be essential in future extrication based on the features we will be looking at. 
 
-# Data Loading and EDA
-We loaded two key datasets; fire_rescue_extrication_casualties and stats19_by_financial_year from the database then left join them by financial year. This dataset has a total of 2310x7 observations and columns. 
-```{r}
-eda_results
-```
+# Data Loading 
+We loaded two key datasets; fire_rescue_extrication_casualties and stats19_by_financial_year from the database then left join them by financial year. This dataset has a total of 2310x7 observations and columns with the key variables and no missing values are present.
 
-# Data Cleaning
-We used sapply() to check for NA values across the dataframe but no NAs are found. Categorical columns were then converted to factors. We found "Unknown" values in extrication, age and sex variables, we decided to drop them as they may post biases and we have enough data. 
+#Exploratory Data Analysis
 ```{r}
+print(eda_results$plots$sex)
+print(eda_results$plots$age)
+```
+From the above, we see that the Sex and Age band are very well balanced and some in the Unknown group which we will be handling them later. This data findings shows uniform distribution. 
 
+```{r}
+print(eda_results$plots$ex_age_sex)
+print(eda_results$plots$ex_age_sev)
 ```
+We see the bar plots with proportions of each extrication method showing uniformity across sex and age. There are no dominant groups observed.  Features extrication by severity and age band also shows uniformity and does not appear to vary much with respect to age band and sex features.
+```{r}
+print(eda_results$plots$ex_mean)
+```
+We extracted the extrication rate by using:
+extrication_rate = n_casualties / number_of_stat19_reported_casualties
+and calculated the mean using age and sex.
+Above shows that the rates are the significantly higher among fatal casualties and that age group of 40-64 has the highest for both sexes. On the other hand, there is minimal differences in the rates between sexes across all age bands, indicating that sex is not a strong indicator for extrication in the severity.  
+```{r}
+print(eda_results$plots$ex_fin)
+```
+Figure 9 shows the mean extrication rates over the financial years. We observed that “Roof Removal” started off at around 9% during year 2010, increasing to around 10% at year 2011 followed up a steep and consistent decline to 3% at year 2019. “Other space creation” on the other hand, started off at around 6% at 2010 but decreased rapidly to around 4% at 2013 which then sort of stayed at 4% up until 2019. The other extrication methods are at 1% throughout the whole time period. The decrease in “Roof removal” suggests that such method is slowly being dismissed as the years go by due to possible infrastructure enhancements for fire hazards or technological and design improvements for extrication procedures. 
 
-# Modelling
+Our EDA has shown no clear differences in disparity in their effects and similar patterns. 
+
+# Modelling and Evaluation
 ```{r}
-summary(model_multinom$model)
-summary(model_multinom$model_int)
-summary(model_multinom$model_severity)
-summary(model_multinom$model_severity_int)
+kable(tidy(chi_sq_results$chisq_sex), caption = "Chi-squared Test: Extrication vs Sex")
+kable(tidy(chi_sq_results$chisq_age), caption = "Chi-squared Test: Extrication vs Age Band")
+kable(tidy(chi_sq_results$chisq_severity), caption = "Chi-squared Test: Extrication vs Severity")
 ```
-# Evaluation of Results
+We have first implemented Chi-Squared test for independence for variables sex, age band and severity to our extrication methods. All tests yielded X-Square of 0 and p-value of 1. This suggests no statistical significance between the extrication method to the variables. 
+
+We fitted multinomial regression with some tested interactions in to 4 Models: 
+1.	extrication ~ sex + age_band
+2.	extrication ~ sex * age_band
+3.	extrication  ~ sex + age_band + casualty_severity
+4.	extrication ~ sex * age_band * casualty_severity
+
 ```{r}
-evaluation
+kable(as.data.frame(evaluation$summary_multinom$coefficients), caption = "Multinomial Model Coefficients")
+kable(as.data.frame(evaluation$summary_multinom_sev$coefficients), caption = "Multinomial + Severity Model Coefficients")
+kable(as.data.frame(evaluation$summary_int$coefficients), caption = "Interaction Model Coefficients")
+kable(as.data.frame(evaluation$summary_sev_int$coefficients), caption = "Interaction + Severity Model Coefficients")
+
+kable(evaluation$aic, caption="Multinomial Regression Model AIC Comparison")
 ```
+Summary shows that all coefficients are zero or close to zero and that all p-values are equal to 1. This suggests that there is no association between the predictors to each of the extrication method used.
+
+Our model comparison using AIC shows that increasing model complexity does not improve model fit. Instead, it worsens it. The simplest model using only sex and age band yielded the lowest AIC score. This suggests that adding more predictors and implementing interactions do not increase explanatory power of the model. 
 
 # Intepretation
+Throughout our analysis, we see no distinct disparities of features across extrication methods and our simplest model achieved the best AIC. In fire and rescue services, features like sex, age band and severity do not have any influence or statistical impact on the extrication method. Hence, no feature is found to be useful in predicting extrication. 

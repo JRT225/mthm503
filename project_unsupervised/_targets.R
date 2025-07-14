@@ -5,6 +5,7 @@ library(here)
 source("R/load_olive_oil_data.R")
 source("R/clean_data.R")
 source("R/olive_eda.R")
+source("R/knn_plot.R")
 source("R/summarize_kmeans_clusters.R")
 source("R/summarize_dbscan_clusters.R")
 source("R/plots.R")
@@ -48,21 +49,32 @@ list(
     plot_elbow(df_scaled)
     ),
   tar_target(
-    kmeans,
-    kmeans(df_scaled, centers = 3, nstart = 30)
-  ),
-  tar_target(
     kmeans_pca_plot, 
     plot_kmeans_pca(pca, kmeans)
     ),
   tar_target(
-    silhouette_kmeans,
+    silhouette_kmeans_1,
     {
       sil <- silhouette(kmeans$cluster, dist(df_scaled))
       sil_df <- as.data.frame(sil[, 1:3])
       colnames(sil_df) <- c("cluster", "neighbor", "sil_width")
       sil_df$cluster <- factor(sil_df$cluster)
+      ggplot(sil_df, aes(x = reorder(row.names(sil_df), sil_width), y = sil_width, fill = cluster)) +
+        geom_bar(stat = "identity") +
+        facet_wrap(~cluster, scales = "free_y") +
+        labs(
+          title = "Silhouette plot",
+          x = "Observation",
+          y = "Silhouette width"
+        ) +
+        coord_flip() +
+        theme_minimal() +
+        theme(axis.text.y = element_blank()) 
     }
+  ),
+  tar_target(
+    knn_plot,
+    plot_knn_dist(df_scaled, k = 5)
   ),
   tar_target(
     db,
@@ -72,6 +84,10 @@ list(
     dbscan_pca_plot, 
     plot_dbscan_pca(pca, db)
     ),
+  tar_target(
+    kmeans,
+    kmeans(df_scaled, centers = 3, nstart = 25)
+  ),
   tar_target(
     kmeans_summary,
     summarize_kmeans_clusters(df_scaled, kmeans)

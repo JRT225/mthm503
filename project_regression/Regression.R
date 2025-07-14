@@ -142,16 +142,16 @@ ggplot(yearly_summary, aes(x = financial_year, y = mean_rate, color = extricatio
   scale_y_continuous(labels = scales::percent) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-
+#Chi-Square Test
 tab_sex <- table(df_clean$extrication, df_clean$sex)
 tab_age <- table(df_clean$extrication, df_clean$age_band)
 tab_severity <- table(df_clean$extrication, df_clean$casualty_severity)
-tab_finance <- table(df_clean$extrication, df_clean$financial_year)
+
 
 chisq.test(tab_sex)
 chisq.test(tab_age)  
 chisq.test(tab_severity)
-chisq.test(tab_finance)
+
 # Multinormial
 model <- multinom(extrication ~ sex + age_band, data = df_clean)
 summary(model)

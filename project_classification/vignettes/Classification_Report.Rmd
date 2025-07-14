@@ -4,8 +4,6 @@ author: "Tay Jing Rui"
 output: html_document
 ---
 
-# Data Summary
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(targets)
@@ -16,70 +14,54 @@ library(corrplot)
 library(gridExtra)
 raw_data <- tar_read(raw_data)
 cleaned_data <- tar_read(cleaned_data)
+eda_results <- tar_read(eda_results)
 evaluation <- tar_read(evaluation)
 ```
 # Introduction
-Pedestrian safety is always an concern in our modern transportation systems as the amount of vehicles are increasing on the streets. The ability to predict the severity of these casualties is crucial for implementing prevention strategies. 
+Pedestrian safety is always a concern in our modern transportation systems as the amount of vehicles are increasing on the streets. The ability to predict the severity of these casualties is crucial for implementing prevention strategies. This project aims to develop and evaluate machine learning models that can accurately classify the severity of pedestrian casualties (“Fatal,” “Serious,” or “Slight”) based on detailed accident data. The primary objectives are to understand the main factors causing increase of casualties across the severity rate and interpret our analysis for road safety improvements. We will be focusing slightly more on Fatal cases predictions as those are the incidents which are more concerning.  
 
 his project aims to develop and evaluate machine learning models that can accurately classify the severity of pedestrian casualties (“Fatal,” “Serious,” or “Slight”) based on detailed accident data. The primary objectives is to understand the main factors causing increase of casualties across the severity rate and interpret our analysis for road safety improvements. We will be focusing slightly more on Fatal cases predcitions as those are the incidents which are more concerning. 
 
 # Data Preparation
-After loading our pedestrian data into a dataframe by pulling from databse using DBI and PostGREs , we observe that summary of it to understand its basic structure. We have a 1420x83 dataset. We then checked for NA values, finding numerous missing data from this dataset. 
-
+After loading our pedestrian data into a dataframe by pulling from databse using DBI and PostGRES , we observe that summary of it to understand its basic structure. We have a 1420x83 dataset. We then checked for NA values, finding numerous missing data from this dataset.  
 
 # EDA before handling and FE
+
 Our summary data also shows quite large range which indicates that many variables has outliers like engine capacity, age features and spatial outliers for grids features. We also observed some negative numbers in road number and vehicle type which suggests errorneous input. 
 
 To evaluate the predictive value of each feature in the raw dataset, I trained a random forest classifier and examined the resulting variable importance table. The MeanDecreaseGini metric was used to rank features by their contribution to classification accuracy. The analysis showed that variables such as age_of_casualty, engine_capacity_cc, geographic coordinates (longitude, latitude, grid_x), age_of_driver, obs_hour, and speed_limit_mph had the highest importance scores. Features with low or near-zero importance, such as obs_year, were considered less relevant for predicting casualty severity and could be excluded from further modeling or feature engineering.
 
 ```{r}
-ggplot(raw_data, aes(as.factor(casualty_severity), fill=as.factor(casualty_severity))) +
-  geom_bar() +
-  labs(title="Casualty Severity Distribution", x="Severity", y="Count") +
-  theme_minimal()
-
-num_vars <- select_if(raw_data, is.numeric)
-if (ncol(num_vars) > 1) {
-  corr_matrix <- cor(num_vars, use="pairwise.complete.obs")
-  corrplot::corrplot(corr_matrix, method = "color", tl.cex=0.7)
-}
+# Distribution of Casualty Severity
+eda_results$severity_dist
 ```
-We showed the balanced of classes for our target variable, casualty_severity to understand its distribution to consider our modelling approach. Next, we examined the correlations among the numeric variables to determine which features are high correlated and have to potentially handle them to mitigate multicollinearity issues. We that the geographical features like grid_x and grid_y are highly correlated to longitude and latitude. Indicating we only have to keep a pair of them in our features. Certain reference variables are also showing high correlations which we have to drop.
+We showed the balanced of classes for our target variable, casualty_severity, which shows not much imbalance in class as shown above. 
+```{r}
+# Correlation Plot
+eda_results$corr_matrix
+```
+Next, we examined the correlations among the numeric variables to determine which features are high correlated and have to potentially handle them to mitigate multicollinearity issues. We that the geographical features like grid_x and grid_y are highly correlated to longitude and latitude. Indicating we only have to keep a pair of them in our features. Certain reference variables are also showing high correlations which we have to drop.
 
 # Data Handling and Feature Engineering
 We first removed columns that contains all NA values as they do not provide any value to our analysis and for the other missing values, we employed imputation based on variable types. We imputed median for numeric columns which is more robust for outliers while imputing most common value for character and factor data type.
+We then exclude identification columns and features which can potentially cause data leakages like accident_index, vehicle_reference and enhanced_casualty_severity. We fitted random forest to our data with its importance metrics to identify which features contributed the most in predicting our casualty_severity target variable and exclude those with low importance score.
+For feature engineering, original obs_date was split into obs_weekday, obs_hour, obs_month, obs_year for date time features. We then bin the continuous variables like casualty_age_group into (Child, Youth, Adult, Elderly), driver_age_group into (Young, Adult, Middle, Senior), speed_zone into (Low, Medium, High), engine_size_group into (Small, Medium, Large). We followed by featuring indicator variables; is_night (1=dark, 0=daylight), is_urban (1=urban, 0=rural), vulnerable_pedestrian (1=Child, 0=Elderly), on_crossing (1=yes, 0=no). 
 
-Original obs_date was split into obs_weekday, obs_hour, obs_month, obs_year for date time features.
-We then bin the continuous variables like casualty_age_group into (Child, Youth, Adult, Elderly), driver_age_group into 
-(Young, Adult, Middle, Senior), speed_zone into (Low, Medium, High), engine_size_group into (Small, Medium, Large).
-We followed by featuring indicator variables; is_night (1=dark, 0=daylight), is_urban (1=urban, 0=rural), 
-vulnerable_pedestrian (1=Child, 0=Elderly), on_crossing (1=yes, 0=no). 
-
-We then computed high cardinality columns after factorizing character data and drop those with more than 30 unique levels and 
-variables like identifiers, references and features like accident_severity.
-
+We further computed high cardinality columns after factorizing character data and drop those with more than 30 unique levels and variables like identifiers, references and features like accident_severity.
 We finally used all the featured variables and the remaining relevant variables after we have decided on the feature importance and cleaning for our model. 
 
 # EDA Visualisation after FE
 ```{r}
-p1 <- ggplot(cleaned_data, aes(speed_zone, fill=casualty_severity)) + 
-  geom_bar(position='dodge') + ggtitle("Speed Zone vs Severity")
-p2 <- ggplot(cleaned_data, aes(as.factor(is_night), fill=casualty_severity)) + 
-  geom_bar(position='dodge') + scale_x_discrete(labels=c("Day","Night")) + ggtitle("Night vs Severity")
-p3 <- ggplot(cleaned_data, aes(engine_size_group, fill=casualty_severity)) + 
-  geom_bar(position='dodge') + ggtitle("Engine Size vs Severity")
-p4 <- ggplot(cleaned_data, aes(casualty_age_group, fill=casualty_severity)) + 
-  geom_bar(position='dodge') + ggtitle("Casualty Age Group vs Severity")
-
-gridExtra::grid.arrange(p1, p2, p3, p4, ncol=2)
-
-num_vars <- select(cleaned_data, where(is.numeric))
-if (ncol(num_vars) > 1) {
-  corr_matrix <- cor(num_vars)
-  corrplot::corrplot(corr_matrix, method = "color")
-}
+# Feature engineered variable bar plots
+gridExtra::grid.arrange(
+  eda_results$speed_vs_severity,
+  eda_results$night_vs_severity,
+  eda_results$engine_vs_severity,
+  eda_results$age_vs_severity,
+  ncol=2
+)
 ```
-The above bar plots of the feature engineered varaibles showing the distribution with respect to casualty_severity. Speed zone showing high casualty across all severity in medium speed zone, this could be areas where many people are around like city areas whereas high speed places like express ways could have lesser chances of pedestrians. We see that Fatal cases happens more often at night which is not surprising but not by much as compared to day. Overall, more accidents occur in the day as more pedestrians are outside. Engine size of medium caused significant more casualties may be due to the population of certain cars on the road. Interestingly, adults age group has the highest count for casualties across all severity due probably due to the highest age range categorised. But Seniors accidents proves to have a lot of fatal cases than serious and slight within Senior group itself.
+The above bar plots shows the distribution of the feature engineered variables with respect to casualty_severity. Speed zone showing high casualty across all severity in medium speed zone, this could be areas where many people are around like city areas whereas high speed places like express ways could have lesser chances of pedestrians. We see that Fatal cases happen more often at night which is not surprising but not by much as compared to day. Overall, more accidents occur in the day as more pedestrians are outside. Engine size of medium caused significant more casualties may be due to the population of certain cars on the road. Interestingly, adults age group has the highest count for casualties across all severity due probably due to the highest age range categorised. But Seniors accidents prove to have a lot of fatal cases than serious and slight within Senior group itself.
 
 # Model Train
 Data is split into training and testing sets using stratified sampling to maintain class distribution. Cross validation of 5 folds with SMOTE is also used to address class imbalance and ensuring that our model is robust enough for evaluation. Three models are being trained; Multinomial Classification, Random Forest and XGBoost.
@@ -97,20 +79,12 @@ cat("Random Forest AUC:", evaluation$auc_rf, "\n")
 cat("XGBoost AUC:", evaluation$auc_xgb, "\n")
 ```
 
-From the above, we compare three of our classification algorithms where the models were evaluated on a hold-out test set to predict the severity of pedestrian casualties ("Fatal", "Serious", "Slight").
+Confusion Matrix shows that our Random Forest yielded the best accuracy of 57.6%, outperforming XGBoost of 55.5% and Multinomial of 56.5% but not by much. XGBoost consistently performing slightly lower for all macro metrics. Kappa value shows RF having the highest of 0.360 as compared to Multinomial and XGBoost of 0.348 and 0.331 respectively. Kappa reflects a "fair-to-moderate" agreement, suggesting moderately better than random guessing but its value is not considered good.  All models have performed better than the baseline No Information Rate of 36% indicating that Multinomial is not just guessing for the majority of the class but learning patterns and making good predictions. Our macro metrics tells us that all models perform very similarly with RF taking a slight lead in all evaluations metrices. 
 
-Confusion Matrix shows that our Multinomial Logistic yielded the best accuracy of 57.6%, outperforming XGBoost of 56.9% and Random Forest of 56.6%. It has performed better than the baseline No Information Rate of 36% indicating that Multinomial is not just guessing for the majority of the class but learning patterns and making good predictions. 
+Per class metrics shows that Multinomial consistently achieving the highest in precision, recall and balanced accuracy across all classes. This suggests that evaluating within each class, multinomial is the most reliable and accurate in its predictions. RF may be better in macro accuracy due to it being more balanced, but it falls behind quite a bit in single class. XGBoost performed better than RF in per class metrics but does not really stand out in any way as compared to Multinomial. 
 
-Looking at the Fatal cases and based on our class metrics, Multinomial achieved 75% sensitivity, higher than RF and XGBoost of 62% and 69% respectively, which is essential as fatal cases are the most crucial in the analysis to reduce casualty deaths.In terms of Precision, RF achieved the highest of 70% showing best prediction for Fatal cases. XGBoost performed slightly better than Multinomial showing slightly less false Fatal predictions. Multinormial is not great at Fatal cases as compared to the other models. However, Multinomial still has the best balanced accuracy. 
-
-For Serious cases, all 3 models seems to be struggling with XGBoost and RF yielding the same sensitivity of 50% and Multinormial yielding best balanced accuracy of 61%. Multinomial achieved the worst sensitivity, 1% lower than random forest but yielded a slight higher balanced accuracy. Precision for all models are not strong, many Serious cases were predicted wrongly. Features for Serious cases could be difficult to differentiate with other classes. This is also understandable as Serious case depends largely on individual circumstances which can be easily at the borderline of either fatal or slight severity.
-
-Slight cases reflects that all models having about the same performance with Random Forest taking the lead of 58% sensitivty and 67% balance accuracy. All 3 models could only predict 55%-58% of slight which shows confusion as well. 
-
-From our ROC-AUC, all 3 models achieved around 75% suggests good overall class discrimination in predicting the probabilities but according to the Kappa value, Multinomial shows the highest of 0.373 as compared to Random Forest and XGBoost of 0.301 and 0.343 respectively. Kappa reflects a "fair-to-moderate" agreement, suggesting moderately better than random guessing.
+From our ROC-AUC, all 3 models achieved around 75% suggests good overall class discrimination in their prediction, with Multinomial at 0.755, RF at 0.742 and XGBoost at 0.75. Multinomial achieving the highest AUC has just a slight edge over the other 2 models. 
 
 # Conclusion
 
-All models performed better than random guessing and are best at predicting Fatal cases. Performance for the Fatal class is highest in terms of recall for the Multinomial Logistic Regression, indicating it is best at detecting Fatal cases. However, Random Forest offers the highest precision for Fatal cases, suggesting fewer false positives. Performance for the Serious class is generally lower across all models, with only marginal differences between them. For the Slight class, recall is highest in Random Forest, and precision is slightly higher in Multinomial. Overall accuracy and multi-class AUC are also highest in the Multinomial model, but the margins are small.
-
-Multinomial Logistic Regression is preferred as Fatal cases are more crucial in analysis. While RF could be used for Slight cases for better detection and predictions. 
+All models performed better than random guessing and are best at predicting Fatal cases. Performance for the Fatal class is highest in terms of recall for the Multinomial Logistic Regression, indicating it is best at detecting Fatal cases. RF may have the highest macro accuracy but Multinomial is only 1% lower and that it outperformed in per class metrics and AUC/ROC metric. Based on our goal in identifying per crisis, especially Fatal incidents analysis. Multinomial Logistic Regression is preferred and is appropriate to be the final model. 
