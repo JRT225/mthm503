@@ -35,7 +35,7 @@ To evaluate the predictive value of each feature in the raw dataset, I trained a
 # Distribution of Casualty Severity
 eda_results$severity_dist
 ```
-We showed the balanced of classes for our target variable, casualty_severity, which shows not much imbalance in class as shown above. 
+We showed the balanced of classes for our target variable, casualty_severity, which shows a slight class imbalance for Fatal as compared to Slight and as shown in Figure 1 above. 
 ```{r}
 # Correlation Plot
 eda_results$corr_matrix

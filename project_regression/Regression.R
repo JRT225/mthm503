@@ -167,14 +167,5 @@ summary(model_severity)
 model_severity_int <- multinom(extrication ~ sex * age_band * casualty_severity, data = df_clean)
 summary(model_severity_int)
 
-summary_list <- list(
-  Model1 = summary(model),
-  Model2 = summary(model_int),
-  Model3 = summary(model_severity),
-  Model4 = summary(model_severity_int)
-)
-
 AIC(model, model_int, model_severity, model_severity_int)
-
-
 
